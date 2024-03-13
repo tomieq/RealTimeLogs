@@ -35,17 +35,24 @@ class MobileLogCollector {
         })
     }
     
+    private func path(for name: String) -> String {
+        FileManager.default.currentDirectoryPath.appending("/\(name).log")
+    }
+
     private func prepareFileHandler(for name: String) {
-        let filePath = FileManager.default.currentDirectoryPath.appending("/\(name).log")
+        let filePath = self.path(for: name) + ".tmp"
         if let output = OutputFileStream(filePath) {
             self.fileHandle[name] = output
-            print("Created file log for \(filePath)")
+            print("Created temporary file log for \(filePath)")
         } else {
-            print("Problem creating file log for \(filePath)")
+            print("Problem creating temporary file log for \(filePath)")
         }
     }
-    
+
     private func closeFileHandle(for name: String) {
         self.fileHandle[name]?.close()
+        let filePath = self.path(for: name)
+        try? FileManager.default.moveItem(atPath: filePath + ".tmp", toPath: filePath)
+        print("Stored logs into \(filePath)")
     }
 }
