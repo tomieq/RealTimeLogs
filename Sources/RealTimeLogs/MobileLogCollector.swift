@@ -34,6 +34,17 @@ class MobileLogCollector {
                 self?.websocketSessions[session] = nil
             }
         })
+        let lastID = try? FileManager.default.contentsOfDirectory(atPath: FileManager.default.currentDirectoryPath)
+            .filter{ $0.contains(".log") }
+            .compactMap { filename in
+                filename.components(separatedBy: CharacterSet(charactersIn: "-")).first
+            }
+            .compactMap { UInt64($0) }
+            .map { $0 + 1 }
+            .max()
+        if let lastID = lastID {
+            ProcessID.current = lastID
+        }
     }
 
     var date: String {
@@ -45,7 +56,7 @@ class MobileLogCollector {
     }
     var time: String {
         let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "HH.mm.ss"
+        dateFormatter.dateFormat = "HH-mm"
         dateFormatter.calendar = Calendar(identifier: .iso8601)
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         return dateFormatter.string(from: Date())
@@ -56,7 +67,7 @@ class MobileLogCollector {
     }
 
     private func prepareFileHandler(for name: String) {
-        let uniqueName = name + "-captured-\(self.date)-at-\(self.time)"
+        let uniqueName = "\(ProcessID.next)-\(name)-captured-\(self.date)-at-\(self.time)"
         let filePath = self.path(for: uniqueName)
         let temporaryFilePath = filePath + ".tmp"
         if let output = OutputFileStream(temporaryFilePath) {
