@@ -10,14 +10,15 @@ import Swifter
 
 class MobileLogCollector {
     private var websocketSessions: [WebSocketSession: String] = [:]
-    private var fileHandle: [String: OutputFileStream] = [:]
+    private var clientFileStream: [String: OutputFileStream] = [:]
+    private var clientFileName: [String: String] = [:]
     
     init(server: HttpServer, logConverter: ((String) -> String)? = nil) {
         server["/mobile"] = websocket(text: { [weak self] session, text in
             guard let name = self?.websocketSessions[session] else { return }
             let log = logConverter?(text) ?? text
             print("\(name): \(log)")
-            if var output = self?.fileHandle[name] {
+            if var output = self?.clientFileStream[name] {
                 print(log, to: &output)
             }
         }, binary: { session, binary in
@@ -34,25 +35,44 @@ class MobileLogCollector {
             }
         })
     }
-    
+
+    var date: String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.calendar = Calendar(identifier: .iso8601)
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        return dateFormatter.string(from: Date())
+    }
+    var time: String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "HH.mm.ss"
+        dateFormatter.calendar = Calendar(identifier: .iso8601)
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        return dateFormatter.string(from: Date())
+    }
+
     private func path(for name: String) -> String {
         FileManager.default.currentDirectoryPath.appending("/\(name).log")
     }
 
     private func prepareFileHandler(for name: String) {
-        let filePath = self.path(for: name) + ".tmp"
-        if let output = OutputFileStream(filePath) {
-            self.fileHandle[name] = output
-            print("Created temporary file log for \(filePath)")
+        let uniqueName = name + "-captured-\(self.date)-at-\(self.time)"
+        let filePath = self.path(for: uniqueName)
+        let temporaryFilePath = filePath + ".tmp"
+        if let output = OutputFileStream(temporaryFilePath) {
+            self.clientFileStream[name] = output
+            self.clientFileName[name] = filePath
+            print("Created temporary file log for \(temporaryFilePath)")
         } else {
-            print("Problem creating temporary file log for \(filePath)")
+            print("Problem creating temporary file log for \(temporaryFilePath)")
         }
     }
 
     private func closeFileHandle(for name: String) {
-        self.fileHandle[name]?.close()
-        let filePath = self.path(for: name)
-        try? FileManager.default.moveItem(atPath: filePath + ".tmp", toPath: filePath)
-        print("Stored logs into \(filePath)")
+        self.clientFileStream[name]?.close()
+        if let filePath = self.clientFileName[name] {
+            try? FileManager.default.moveItem(atPath: filePath + ".tmp", toPath: filePath)
+            print("Stored logs into \(filePath)")
+        }
     }
 }
